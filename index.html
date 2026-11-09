@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>善良可爱的熊大人成长史</title>
+<style>
+  body { margin: 0; }
+
+  /* 舞台 = 整个页面，背景图铺满 */
+  .stage {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background-image: url("image/background.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: grid;
+    place-items: center;
+  }
+
+  /* 相框：两张图都塞进这一格，天然重叠并居中 */
+  .photo {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ph {
+    grid-area: 1 / 1;          /* 关键：两张图都放进同一个格子 → 完全重叠 */
+    width: auto;
+    height: auto;
+    max-width: 88vw;          /* 保持原比例的天花板 */
+    max-height: 82vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    opacity: 0;               /* 一开始都藏起来，由 JS 决定谁亮 */
+    transition: opacity .6s ease;   /* 淡入淡出的时长，和下方 FADE 对应 */
+  }
+
+  /* 弹幕层 */
+  .layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+  .dm {
+    position: absolute;
+    left: 100%;
+    width: 100%;
+    margin: 0;
+    white-space: nowrap;
+    font: 700 20px/1.4 system-ui, sans-serif;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,.7);
+    animation: scroll linear infinite;
+  }
+
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-200%); }
+  }
+
+  /* ===== 右下角音乐按钮 ===== */
+  .play-btn {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 10;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font: 600 14px/1 system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+</style>
+</head>
+<body>
+
+<!-- 音频容器：不显示原生控件，靠下面的按钮控制 -->
+ <audio id="bgm" src="audio/bgmusic.m4a" loop preload="auto"></audio>
+  <button id="playBtn" class="play-btn">♪ 点击开启背景音乐</button>
+  <div class="stage">
+    <div class="photo">
+      <img class="ph" id="ph1" src="image/1.jpg" alt="">
+      <img class="ph" id="ph2" src="image/2.jpg" alt="">
+    </div>
+
+    <div class="layer">
+      <p class="dm" style="top:8%;  animation-duration:16s; animation-delay:0s">熊大人太可爱啦～</p>
+      <p class="dm" style="top:22%; animation-duration:21s; animation-delay:-8s">熊大人威武！！！！</p>
+      <p class="dm" style="top:36%; animation-duration:13s; animation-delay:-4s">熊大人好温柔啊呜呜呜</p>
+      <p class="dm" style="top:46%; animation-duration:23s; animation-delay:-12s">熊大人最好了"ദ്ദി(˶>𖥦˶)✧"</p>
+    <p class="dm" style="top:14%; animation-duration:18s; animation-delay:-6s">熊大大今天的笑容又犯规了 (˶ᵔ ᵕ ᵔ˶)</p>
+    <p class="dm" style="top:30%; animation-duration:15s; animation-delay:-10s">熊大大是人间小太阳！！！</p>
+    <p class="dm" style="top:42%; animation-duration:20s; animation-delay:-3s">熊大大出场自带高光 ✧(≖ ◡ ≖✿)</p>
+    <p class="dm" style="top:54%; animation-duration:14s; animation-delay:-9s">熊大大怎么可以这么可爱啊</p>
+    <p class="dm" style="top:64%; animation-duration:22s; animation-delay:-14s">熊大大一出现，风都变甜了</p>
+    <p class="dm" style="top:74%; animation-duration:17s; animation-delay:-5s">熊大大天下第一！！！</p>
+    <p class="dm" style="top:82%; animation-duration:19s; animation-delay:-11s">熊大大值得所有最好的东西</p>
+    <p class="dm" style="top:90%; animation-duration:24s; animation-delay:-16s">熊大大慢慢走，我们一直陪着</p>
+    <p class="dm" style="top:28%; animation-duration:16s; animation-delay:-13s">熊大大是我今天最大的快乐来源</p>
+    <p class="dm" style="top:70%; animation-duration:13s; animation-delay:-2s">熊大大要不要考虑一下出道 (๑•̀ㅂ•́)و✧</p>
+    
+    </div>
+  </div>
+
+<script>
+ /* ========== 1. 图片自动轮播（双缓冲 + 预留下一张） ========== */
+const TOTAL  = 20;        // ★ 实际张数
+const INTERVAL = 3500;    // 每张停留时间
+
+const pics = [document.getElementById('ph1'), document.getElementById('ph2')];
+
+let front = 0;            // 台前是哪个槽（0 或 1）
+let next  = 2;            // ★ 中间变量：下一张的编号，已提前预热好
+let ready = false;        // 首张加载完了吗
+
+const buffer = new Image();   // ★ 预热仓：不上屏，只负责提前下载
+
+function urlOf(n) { return 'image/' + n + '.jpg'; }
+
+/* 开局先预热第 2 张 */
+buffer.src = urlOf(next);
+
+/* 开局亮第 1 张，等它真正就绪 */
+pics[0].onload = function () {
+  pics[0].onload = null;
+  pics[0].style.opacity = 1;
+  ready = true;
+};
+pics[0].src = urlOf(1);
+
+setInterval(function () {
+  if (!ready) return;
+
+  const showing = pics[front];       // 台前
+  const back    = pics[1 - front];   // 后台空槽
+
+  back.onload = function () {
+    back.onload = null;
+    back.style.opacity = 1;          // 就绪才淡入
+    showing.style.opacity = 0;       // 同步淡出
+  };
+  back.onerror = function () {
+    back.onerror = null;
+    console.warn('跳过失败的图：' + urlOf(next));
+  };
+
+  back.src = urlOf(next);            // ① 用掉预留的那张（命中缓存，瞬间可用）
+  front = 1 - front;                 // ② 台前/后台对调
+
+  next = next % TOTAL + 1;           // ③ 推进一格：1→2→…→TOTAL→1
+  buffer.src = urlOf(next);          // ④ 立刻预热新的"下一张"
+}, INTERVAL);
+
+  /* ========== 2. 背景音乐 ========== */
+  const bgm = document.getElementById('bgm');
+  const btn = document.getElementById('playBtn');
+
+  bgm.volume = 0.5;
+
+  btn.addEventListener('click', function () {
+    if (bgm.paused) {
+      bgm.play();
+      btn.textContent = '♪ 播放中（点击暂停）';
+    } else {
+      bgm.pause();
+      btn.textContent = '♪ 已暂停，点击继续';
+    }
+  });
+</script>
+</body>
+</html>
